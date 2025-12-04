@@ -15,9 +15,10 @@ except:
 
 # --- 2. FUNKTION: STÄDA BORT KÄLLHÄNVISNINGAR ---
 def clean_text(text):
-    # [cite_start]Denna rad tar bort text som ser ut som [cite: 123]
-    # Vi använder raw-string (r-tecknet) för att slippa krångel med specialtecken
-    return re.sub(r'\', '', text)
+    # Vi använder dubbla citattecken här för att undvika syntaxfel
+    # Detta tar bort allt som ser ut som
+    pattern = r"\"
+    return re.sub(pattern, "", text)
 
 # --- 3. FUNKTION: LÄS PDF ---
 def get_pdf_text_smart():
