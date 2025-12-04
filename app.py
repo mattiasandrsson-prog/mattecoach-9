@@ -15,9 +15,10 @@ except:
 
 # --- 2. FUNKTION: STÄDA BORT [cite] ---
 def clean_text(text):
-    # [cite_start]Den här raden tar bort text som ser ut som [cite: 123]
-    # Vi använder ett "raw string" (r'') för att undvika syntaxfel
-    return re.sub(r'\', '', text)
+    # Vi använder ett tryggare sätt att skriva mönstret för att undvika fel
+    # Detta tar bort allt som ser ut som
+    pattern = r"\"
+    return re.sub(pattern, "", text)
 
 # --- 3. FUNKTION: LÄS PDF ---
 def get_pdf_text_smart():
