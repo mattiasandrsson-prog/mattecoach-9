@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import os
+import re
 from pypdf import PdfReader
 
 # --- 1. KONFIGURATION ---
@@ -86,4 +87,5 @@ if prompt := st.chat_input("Vad behöver du hjälp med?"):
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
             st.error(f"Något gick fel (oftast för mycket text). Försök igen om en minut! Fel: {e}")
+
 
