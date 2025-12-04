@@ -60,7 +60,7 @@ Var uppmuntrande men seriös.
 # --- 5. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
 # Vi använder 1.5 Flash för att den är stabilast med filer
-model = genai.GenerativeModel('models/gemini-1.5-flash')
+model = genai.GenerativeModel('models/gemini-2.5-flash')
 
 # --- 6. CHATTEN ---
 st.title("🎓 Mattecoachen")
@@ -88,3 +88,4 @@ if prompt := st.chat_input("Vad behöver du hjälp med?"):
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
             st.error(f"Ett fel uppstod. Försök igen! (Felkod: {e})")
+
