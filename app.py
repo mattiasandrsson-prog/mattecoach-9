@@ -16,6 +16,7 @@ except:
 def get_pdf_text_smart():
     text_content = ""
     # Läs alla PDF-filer i mappen
+    # Vi kollar bara i nuvarande mapp (.)
     if not os.path.exists('.'):
         return ""
         
@@ -38,7 +39,6 @@ def get_pdf_text_smart():
 pdf_text = get_pdf_text_smart()
 
 # --- 4. MASTER PROMPT (Hjärnan) ---
-# Vi lägger detta i systeminstruktionen så den alltid minns vem den är
 master_prompt = f"""
 DU ÄR "MATTECOACHEN" (Stavat med e).
 Du är en pedagogisk mattelärare för årskurs 9.
@@ -49,22 +49,22 @@ DIN KUNSKAP (Från dina uppladdade filer):
 
 DINA REGLER:
 1. Ge aldrig svaret direkt. Lotsa eleven steg för steg.
-2. Använd fakta från texten ovan.
-3. Härma stilen från de gamla nationella proven.
+2. Använd fakta från texten ovan (t.ex. formler för geometri).
+3. SKAPA NYA UPPGIFTER: Du SKA generera egna, unika uppgifter när eleven ber om träning.
+   - Kopiera inte uppgifter ordagrant från filerna.
+   - Hitta på nya siffror och sammanhang, men behåll samma svårighetsgrad och stil som i de gamla proven.
+   - Var ärlig: Säg "Här är en uppgift i NP-stil som jag tagit fram åt dig", påstå inte att det är ett specifikt nummer från ett gammalt prov.
+
 4. Stavning: Se till att stava matematiska begrepp korrekt på svenska.
 
 PEDAGOGIK:
 Var uppmuntrande men seriös. 
 """
 
-# --- 5. STARTA MODELLEN MED MINNE ---
+# --- 5. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
-
-# Vi sätter instruktionen HÄR istället, så den sitter i "ryggmärgen"
-model = genai.GenerativeModel(
-    'models/gemini-2.5-flash',
-    system_instruction=master_prompt
-)
+# Vi använder 2.5 Flash för att den är stabilast med filer
+model = genai.GenerativeModel('models/gemini-2.5-flash')
 
 # --- 6. CHATTEN ---
 st.title("🎓 Mattecoachen")
@@ -73,44 +73,34 @@ st.caption("Din digitala lärare inför NP")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Visa historik på skärmen
+# Visa historik
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
 # Ta emot fråga
 if prompt := st.chat_input("Vad behöver du hjälp med?"):
-    # 1. Spara användarens fråga
+    # Spara elevens fråga
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Bygg upp historiken för AI:n (HÄR ÄR FIXEN!)
-    # Vi måste göra om Streamlits historik till Googles format
+    # Förbered historik för Google
     gemini_history = []
     for msg in st.session_state.messages:
-        # Streamlit heter "assistant", Google vill ha "model"
         role = "user" if msg["role"] == "user" else "model"
         gemini_history.append({"role": role, "parts": [msg["content"]]})
 
-    # 3. Skicka allt till AI:n
     with st.chat_message("assistant"):
         try:
-            # Vi startar chatten med hela historiken inladdad
-            chat = model.start_chat(history=gemini_history)
-            
-            # Eftersom historiken redan innehåller senaste frågan (prompt)
-            # via loopen ovan, behöver vi tekniskt sett inte skicka den igen,
-            # men Gemini API:t kräver en input för att svara.
-            # Vi skickar en tom sträng eller upprepar frågan, men snyggast är
-            # att starta chatten med historiken MINUS den sista frågan, 
-            # och sen skicka sista frågan nu.
-            
-            # Så vi backar ett steg i listan vi byggde:
-            history_minus_last = gemini_history[:-1] 
+            # Vi startar chatten med historik utom sista meddelandet
+            history_minus_last = gemini_history[:-1]
             chat = model.start_chat(history=history_minus_last)
             
-            response = chat.send_message(prompt)
+            # Vi skickar Master Prompten osynligt varje gång för att påminna den om reglerna
+            full_prompt = master_prompt + "\n\nELEVEN SÄGER: " + prompt
+            
+            response = chat.send_message(full_prompt)
             
             st.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
