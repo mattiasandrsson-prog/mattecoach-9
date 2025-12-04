@@ -10,15 +10,14 @@ st.set_page_config(page_title="Mattecoachen Åk 9", page_icon="🎓")
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except:
-    st.error("Ingen API-nyckel hittad.")
+    st.error("Ingen API-nyckel hittad. Lägg in den i Streamlit Secrets!")
     st.stop()
 
-# --- 2. FUNKTION: STÄDA BORT [cite] ---
+# --- 2. FUNKTION: STÄDA BORT KÄLLHÄNVISNINGAR ---
 def clean_text(text):
-    # Vi använder ett tryggare sätt att skriva mönstret för att undvika fel
-    # Detta tar bort allt som ser ut som
-    pattern = r"\"
-    return re.sub(pattern, "", text)
+    # [cite_start]Denna rad tar bort text som ser ut som [cite: 123]
+    # Vi använder raw-string (r-tecknet) för att slippa krångel med specialtecken
+    return re.sub(r'\', '', text)
 
 # --- 3. FUNKTION: LÄS PDF ---
 def get_pdf_text_smart():
@@ -49,7 +48,7 @@ DIN KUNSKAP (Från dina uppladdade filer):
 {pdf_text}
 
 DINA REGLER:
-1. Ge aldrig svaret direkt. Lotsa eleven.
+1. Ge aldrig svaret direkt. Lotsa eleven steg för steg.
 2. Använd fakta från texten ovan (t.ex. formler för geometri).
 3. Härma stilen från de gamla nationella proven.
 4. Stavning: Se till att stava matematiska begrepp korrekt på svenska.
