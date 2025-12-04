@@ -55,7 +55,7 @@ genai.configure(api_key=api_key)
 # Vi använder den nya modellen du hittade i listan!
 try:
     # Denna är snabb och smart (från din lista)
-    model = genai.GenerativeModel('models/gemini-2.0-flash-exp') 
+    model = genai.GenerativeModel('models/gemini-2.5-flash') 
 except:
     # Reservplan
     model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
@@ -86,3 +86,4 @@ if prompt := st.chat_input("Vad behöver du hjälp med?"):
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
             st.error(f"Något gick fel (oftast för mycket text). Försök igen om en minut! Fel: {e}")
+
