@@ -72,13 +72,14 @@ if prompt := st.chat_input("Vad behöver du hjälp med?"):
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         try:
-            model = genai.GenerativeModel('gemini-pro')
+            model = genai.GenerativeModel('gemini-1.5-flash-001')
             chat = model.start_chat(history=[])
             response = chat.send_message(master_prompt + "\n\nELEVEN FRÅGAR: " + prompt)
             message_placeholder.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
             st.error(f"Något gick fel. Felmeddelande: {e}")
+
 
 
 
