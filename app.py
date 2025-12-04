@@ -1,7 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
 import os
-import re
 from pypdf import PdfReader
 
 # --- 1. KONFIGURATION ---
@@ -13,17 +12,18 @@ except:
     st.error("Ingen API-nyckel hittad. Lägg in den i Streamlit Secrets!")
     st.stop()
 
-# --- 2. FUNKTION: STÄDA BORT KÄLLHÄNVISNINGAR ---
-def clean_text(text):
-    # Denna rad tar bort text som ser ut som
-    # Vi använder ett säkert sätt att skriva mönstret
-    return re.sub(r"\", "", text)
-
-# --- 3. FUNKTION: LÄS PDF ---
+# --- 2. FUNKTION: LÄS PDF ---
 def get_pdf_text_smart():
     text_content = ""
     # Läs alla PDF-filer i mappen
+    # Vi kollar bara i nuvarande mapp (.)
+    if not os.path.exists('.'):
+        return ""
+        
     pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf')]
+    
+    if not pdf_files:
+        return ""
     
     for filename in pdf_files:
         try:
@@ -35,10 +35,10 @@ def get_pdf_text_smart():
             continue
     return text_content
 
-# --- 4. LÄS IN KUNSKAPEN ---
+# --- 3. LÄS IN KUNSKAPEN ---
 pdf_text = get_pdf_text_smart()
 
-# --- 5. MASTER PROMPT (Hjärnan) ---
+# --- 4. MASTER PROMPT (Hjärnan) ---
 master_prompt = f"""
 DU ÄR "MATTECOACHEN" (Stavat med e).
 Du är en pedagogisk mattelärare för årskurs 9.
@@ -57,12 +57,12 @@ PEDAGOGIK:
 Var uppmuntrande men seriös. 
 """
 
-# --- 6. STARTA MODELLEN ---
+# --- 5. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
 # Vi använder 1.5 Flash för att den är stabilast med filer
 model = genai.GenerativeModel('models/gemini-1.5-flash')
 
-# --- 7. CHATTEN ---
+# --- 6. CHATTEN ---
 st.title("🎓 Mattecoachen")
 st.caption("Din digitala lärare inför NP")
 
@@ -83,8 +83,8 @@ if prompt := st.chat_input("Vad behöver du hjälp med?"):
             chat = model.start_chat(history=[])
             response = chat.send_message(master_prompt + "\n\nELEVEN FRÅGAR: " + prompt)
             
-            # Här tvättar vi svaret innan det visas
-            final_text = clean_text(response.text)
-            
-            st.markdown(final_text)
-            st.session_state
+            # Vi visar svaret direkt utan att tvätta det
+            st.markdown(response.text)
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
+        except Exception as e:
+            st.error(f"Ett fel uppstod. Försök igen! (Felkod: {e})")
