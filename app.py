@@ -15,10 +15,9 @@ except:
 
 # --- 2. FUNKTION: STÄDA BORT KÄLLHÄNVISNINGAR ---
 def clean_text(text):
-    # Vi använder dubbla citattecken här för att undvika syntaxfel
-    # Detta tar bort allt som ser ut som
-    pattern = r"\"
-    return re.sub(pattern, "", text)
+    # Denna rad tar bort text som ser ut som
+    # Vi använder ett säkert sätt att skriva mönstret
+    return re.sub(r"\", "", text)
 
 # --- 3. FUNKTION: LÄS PDF ---
 def get_pdf_text_smart():
@@ -88,6 +87,4 @@ if prompt := st.chat_input("Vad behöver du hjälp med?"):
             final_text = clean_text(response.text)
             
             st.markdown(final_text)
-            st.session_state.messages.append({"role": "assistant", "content": final_text})
-        except Exception as e:
-            st.error(f"Ett fel uppstod. Försök igen! (Felkod: {e})")
+            st.session_state
