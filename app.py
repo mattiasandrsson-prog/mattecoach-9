@@ -7,63 +7,64 @@ from pypdf import PdfReader
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="Mattecoachen Åk 9", page_icon="🎓")
 
-# Hämta API-nyckeln säkert från Secrets
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except:
-    st.error("Ingen nyckel hittad! Lägg in den i Streamlit Secrets.")
+    st.error("Ingen API-nyckel hittad.")
     st.stop()
 
-# --- 2. FUNKTION: LÄS ALLA PDF:ER I SAMMA MAPP ---
-def get_all_pdfs_text():
+# --- 2. FUNKTION: STÄDA BORT [cite] ---
+def clean_text(text):
+    # [cite_start]Tar bort källhänvisningar som ser ut som [cite: 123]
+    cleaned = re.sub(r'\', '', text)
+    return cleaned
+
+# --- 3. FUNKTION: LÄS PDF ---
+def get_pdf_text_smart():
     text_content = ""
-    # Hitta alla filer som slutar på .pdf i nuvarande mapp (.)
+    # Läs alla PDF-filer i mappen
     pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf')]
     
-    if not pdf_files:
-        return ""
-
     for filename in pdf_files:
         try:
             reader = PdfReader(filename)
             text_content += f"\n--- DOKUMENT: {filename} ---\n"
             for page in reader.pages:
                 text_content += page.extract_text() + "\n"
-        except Exception as e:
+        except:
             continue
-            
     return text_content
 
-# --- 3. LÄS IN KUNSKAPEN ---
-pdf_text = get_all_pdfs_text()
+# --- 4. LÄS IN KUNSKAPEN ---
+pdf_text = get_pdf_text_smart()
 
-# --- 4. INSTRUKTIONEN (Hjärnan) ---
-# Här kombinerar vi din PDF-text med strikta regler
+# --- 5. MASTER PROMPT (Hjärnan) ---
+# Här rättar vi stavningen!
 master_prompt = f"""
-DU ÄR EN MATTECOACH FÖR ÅRSKURS 9.
-Du har tillgång till följande kursmaterial (Sammanfattningar & Gamla Prov):
+DU ÄR "MATTECOACHEN" (Stavat med e).
+Du är en pedagogisk mattelärare för årskurs 9.
+Presentera dig alltid som "Mattecoachen".
+
+DIN KUNSKAP (Från dina uppladdade filer):
 {pdf_text}
 
-REGLER:
+DINA REGLER:
 1. Ge aldrig svaret direkt. Lotsa eleven.
-2. [cite_start]Använd fakta från texten ovan (t.ex. formler för geometri eller sannolikhet [cite: 336-352, 607-610]).
-3. Härma stilen från de gamla nationella proven när du skapar uppgifter.
+2. Använd fakta från texten ovan (t.ex. formler för geometri).
+3. Härma stilen från de gamla nationella proven.
+4. Stavning: Se till att stava matematiska begrepp korrekt på svenska.
+
+PEDAGOGIK:
+Var uppmuntrande men seriös. 
 """
 
-# --- 5. STARTA AI-MODELLEN ---
+# --- 6. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
+model = genai.GenerativeModel('models/gemini-1.5-flash')
 
-# Vi använder den nya modellen du hittade i listan!
-try:
-    # Denna är snabb och smart (från din lista)
-    model = genai.GenerativeModel('models/gemini-2.5-flash') 
-except:
-    # Reservplan
-    model = genai.GenerativeModel('models/gemini-1.5-flash-latest')
-
-# --- 6. CHATTEN ---
-st.title("🎓 Mattecoachen Åk 9")
-st.caption(f"Läste in {len([f for f in os.listdir('.') if f.endswith('.pdf')])} st PDF-filer.")
+# --- 7. CHATTEN ---
+st.title("🎓 Mattecoachen")
+st.caption("Din digitala lärare inför NP")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -78,14 +79,14 @@ if prompt := st.chat_input("Vad behöver du hjälp med?"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
-        message_placeholder = st.empty()
         try:
             chat = model.start_chat(history=[])
-            # Vi skickar prompten + elevens fråga
             response = chat.send_message(master_prompt + "\n\nELEVEN FRÅGAR: " + prompt)
-            message_placeholder.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            
+            # Här tvättar vi svaret innan det visas
+            final_text = clean_text(response.text)
+            
+            st.markdown(final_text)
+            st.session_state.messages.append({"role": "assistant", "content": final_text})
         except Exception as e:
-            st.error(f"Något gick fel (oftast för mycket text). Försök igen om en minut! Fel: {e}")
-
-
+            st.error(f"Ett fel uppstod. Försök igen! (Felkod: {e})")
