@@ -1,3 +1,35 @@
-streamlit
-google-generativeai>=0.7.2
-pypdf
+import streamlit as st
+import google.generativeai as genai
+
+st.title("🕵️‍♀️ Detektiv-läge")
+
+# 1. Hämta nyckeln
+try:
+    api_key = st.secrets["GOOGLE_API_KEY"]
+    st.success(f"Nyckel hittad! Den börjar på: {api_key[:5]}...")
+except:
+    st.error("Ingen nyckel hittad i Secrets!")
+    st.stop()
+
+# 2. Konfigurera
+genai.configure(api_key=api_key)
+
+# 3. Lista alla modeller
+st.write("Frågar Google vilka modeller som finns...")
+
+try:
+    models = genai.list_models()
+    found_any = False
+    for m in models:
+        if 'generateContent' in m.supported_generation_methods:
+            st.write(f"✅ Hittade: **{m.name}**")
+            found_any = True
+    
+    if not found_any:
+        st.error("Listan är tom! Nyckeln verkar inte ha behörighet.")
+    else:
+        st.success("Hittade modeller! Byt tillbaka till Mattecoach-koden och använd ett av namnen ovan.")
+
+except Exception as e:
+    st.error(f"Kunde inte lista modeller. Felet är: {e}")
+    st.info("Tips: Detta betyder oftast att nyckeln är ogiltig eller att 'Google AI Studio'-kontot inte är aktiverat korrekt.")
