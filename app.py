@@ -15,9 +15,9 @@ except:
 
 # --- 2. FUNKTION: STÄDA BORT [cite] ---
 def clean_text(text):
-    # [cite_start]Tar bort källhänvisningar som ser ut som [cite: 123]
-    cleaned = re.sub(r'\', '', text)
-    return cleaned
+    # [cite_start]Den här raden tar bort text som ser ut som [cite: 123]
+    # Vi använder ett "raw string" (r'') för att undvika syntaxfel
+    return re.sub(r'\', '', text)
 
 # --- 3. FUNKTION: LÄS PDF ---
 def get_pdf_text_smart():
@@ -39,7 +39,6 @@ def get_pdf_text_smart():
 pdf_text = get_pdf_text_smart()
 
 # --- 5. MASTER PROMPT (Hjärnan) ---
-# Här rättar vi stavningen!
 master_prompt = f"""
 DU ÄR "MATTECOACHEN" (Stavat med e).
 Du är en pedagogisk mattelärare för årskurs 9.
@@ -60,6 +59,7 @@ Var uppmuntrande men seriös.
 
 # --- 6. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
+# Vi använder 1.5 Flash för att den är stabilast med filer
 model = genai.GenerativeModel('models/gemini-1.5-flash')
 
 # --- 7. CHATTEN ---
