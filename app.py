@@ -30,7 +30,7 @@ def get_pdf_text_smart():
 
 pdf_text = get_pdf_text_smart()
 
-# --- 3. MENY & ÄMNESVAL ---
+# --- 3. MENY (Med inbyggt formelblad) ---
 with st.sidebar:
     st.header("⚙️ Välj fokus")
     
@@ -47,24 +47,41 @@ with st.sidebar:
     )
     
     st.divider()
+    
+    # --- FORMELBLAD (Visas direkt i menyn) ---
+    st.subheader("🧮 Formelsamling")
+    with st.expander("Visa formler"):
+        st.markdown("**GEOMETRI**")
+        st.caption("Rektangel Area")
+        st.latex(r"A = b \cdot h")
+        st.caption("Triangel Area")
+        st.latex(r"A = \frac{b \cdot h}{2}")
+        st.caption("Cirkel Area & Omkrets")
+        st.latex(r"A = \pi \cdot r^2")
+        st.latex(r"O = \pi \cdot d")
+        
+        st.markdown("---")
+        st.markdown("**ALGEBRA**")
+        st.caption("Räta linjens ekvation")
+        st.latex(r"y = kx + m")
+        st.caption("Prioriteringsregler")
+        st.markdown("1. Parenteser\n2. Potenser\n3. Gånger/Delat\n4. Plus/Minus")
+
+    st.divider()
     if st.button("Nollställ chatten"):
         st.session_state.messages = []
         st.rerun()
 
-# --- 4. DETEKTIV: INITIERA & KOLLA ÄMNESBYTE (Här var felet!) ---
-
-# A. Se till att 'messages' alltid finns innan vi rör den
+# --- 4. DETEKTIV: KOLLA ÄMNESBYTE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# B. Se till att 'last_topic' finns
 if "last_topic" not in st.session_state:
     st.session_state.last_topic = selected_topic
 
-# C. Kolla om eleven bytt ämne -> Rensa i så fall
 if st.session_state.last_topic != selected_topic:
-    st.session_state.messages = []  # Rensa historik
-    st.session_state.last_topic = selected_topic  # Spara nytt ämne
+    st.session_state.messages = []
+    st.session_state.last_topic = selected_topic
 
 # --- 5. DYNAMISK PROMPT ---
 if "Nationella Prov" in selected_topic:
@@ -110,7 +127,6 @@ model = genai.GenerativeModel(
 # --- 7. CHATTEN ---
 st.title(f"🎓 {selected_topic}")
 
-# Lägg in välkomstmeddelandet om chatten är tom
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": welcome_text})
 
