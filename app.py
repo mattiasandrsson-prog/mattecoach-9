@@ -30,15 +30,14 @@ def get_pdf_text_smart():
 
 pdf_text = get_pdf_text_smart()
 
-# --- 3. MENY (Nu med NP-val) ---
+# --- 3. MENY & ÄMNESVAL ---
 with st.sidebar:
     st.header("⚙️ Välj fokus")
     
-    # Här lägger vi till "Nationella Prov" som ett specifikt val
     selected_topic = st.selectbox(
         "Vad vill du göra idag?",
         [
-            "🏆 Nationella Prov (Simulering)",  # <--- NYTT VAL
+            "🏆 Nationella Prov (Simulering)",
             "🔢 Taluppfattning",
             "🧮 Algebra & Ekvationer",
             "📐 Geometri",
@@ -48,37 +47,41 @@ with st.sidebar:
     )
     
     st.divider()
-    st.caption("Tips: Välj 'Nationella Prov' för att blanda uppgifter och testa dig inför provet.")
-    
     if st.button("Nollställ chatten"):
         st.session_state.messages = []
         st.rerun()
 
-# --- 4. DYNAMISK PROMPT (Hjärnan anpassar sig) ---
+# --- 4. DETEKTIV: BYTT ÄMNE? (Här är fixen!) ---
+# Vi kollar om eleven har bytt ämne sen sist. I så fall rensar vi chatten.
+if "last_topic" not in st.session_state:
+    st.session_state.last_topic = selected_topic
 
-# Vi kollar vad eleven valde och ändrar instruktionen baserat på det
+if st.session_state.last_topic != selected_topic:
+    st.session_state.messages = []  # Rensa historik
+    st.session_state.last_topic = selected_topic  # Spara nytt ämne
+
+# --- 5. DYNAMISK PROMPT ---
 if "Nationella Prov" in selected_topic:
     # --- LÄGE 1: NP-SIMULATOR ---
     mission_instruction = """
     DU ÄR EN PROVLEDARE INFÖR NATIONELLA PROVEN.
     1. Ditt mål är att simulera ett riktigt prov.
-    2. Blanda uppgifter från alla områden (Geometri, Algebra, Sannolikhet etc.).
-    3. Härma stilen och språkbruket från de gamla proven EXAKT.
-    4. Börja med en E-uppgift, men om eleven svarar rätt, gå snabbt mot C och A-nivå (problemlösning).
+    2. Blanda uppgifter från alla områden.
+    3. Härma stilen från de gamla proven.
     """
-    welcome_text = "Hej! Nu kör vi NP-träning. Jag kommer blanda uppgifter från alla områden, precis som på riktigt. Är du redo för första frågan?"
+    welcome_text = "🏆 **NP-LÄGE:** Nu kör vi! Jag kommer blanda uppgifter från alla områden (Geometri, Algebra, etc). Är du redo för första frågan?"
 
 else:
     # --- LÄGE 2: ÄMNES-TUTOR ---
     mission_instruction = f"""
     DU ÄR EN PEDAGOGISK PRIVATLÄRARE I: {selected_topic.upper()}.
-    1. Ditt mål är att lära eleven förstå just detta område på djupet.
-    2. Håll dig enbart till ämnet "{selected_topic}".
-    3. Var extra tålmodig och förklara begrepp om eleven fastnar.
+    1. Håll dig strikt till ämnet "{selected_topic}".
+    2. Var extra tålmodig och förklara begrepp djupt.
+    3. Använd fakta från din bok om just detta område.
     """
-    welcome_text = f"Hej! Då fokuserar vi på **{selected_topic}**. Vad vill du börja med? Eller ska jag ge dig en startuppgift?"
+    welcome_text = f"📘 **FOKUS: {selected_topic.upper()}**\n\nHej! Jag är inställd på att bara köra {selected_topic} med dig. Vill du ha en genomgång eller en övningsuppgift?"
 
-# Den kompletta prompten
+# Master Prompt
 master_prompt = f"""
 DU ÄR MATTECOACHEN.
 {mission_instruction}
@@ -88,28 +91,24 @@ DIN KUNSKAPSBAS (Använd alltid denna fakta):
 
 GENERELLA REGLER:
 1. Ge aldrig svaret direkt. Lotsa eleven.
-2. Nivåer:
-   - E: Procedur/Begrepp.
-   - C: Flera steg.
-   - A: Resonemang/Generalisering.
-3. Om eleven svarar RÄTT -> Ge beröm och öka nivån.
-4. Om eleven svarar FEL -> Förklara pedagogiskt och sänk nivån.
+2. Svarar eleven RÄTT -> Ge beröm + Svårare fråga.
+3. Svarar eleven FEL -> Förklara + Enklare fråga.
 
 TON: Peppande, tydlig och hjälpsam.
 """
 
-# --- 5. STARTA MODELLEN ---
+# --- 6. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel(
     'models/gemini-2.5-flash',
     system_instruction=master_prompt
 )
 
-# --- 6. CHATTEN ---
+# --- 7. CHATTEN ---
 st.title(f"🎓 {selected_topic}")
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+# Lägg in välkomstmeddelandet om chatten är tom (t.ex. efter ämnesbyte)
+if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": welcome_text})
 
 for message in st.session_state.messages:
@@ -131,8 +130,8 @@ if prompt := st.chat_input("Skriv ditt svar eller din fråga här..."):
             history_minus_last = gemini_history[:-1]
             chat = model.start_chat(history=history_minus_last)
             
-            # Vi påminner den om vad som är valt
-            context_reminder = f"[SYSTEM: Eleven har valt läget: {selected_topic}. Följ instruktionen för detta läge.]"
+            # Påminnelse om ämnet (osynlig system-instruktion)
+            context_reminder = f"[SYSTEM: Eleven är i läget '{selected_topic}'. Håll dig till det.]"
             
             response = chat.send_message(context_reminder + "\n\nSVAR: " + prompt)
             st.markdown(response.text)
