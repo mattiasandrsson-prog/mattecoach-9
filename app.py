@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import os
+import re
 from pypdf import PdfReader
 
 # --- 1. KONFIGURATION ---
@@ -12,14 +13,19 @@ except:
     st.error("Ingen API-nyckel hittad. Lägg in den i Streamlit Secrets!")
     st.stop()
 
-# --- 2. FUNKTION: LÄS PDF (FÖR AI-MINNET) ---
+# --- 2. FUNKTION: STÄDA BORT KÄLLHÄNVISNINGAR ---
+def clean_text(text):
+    # Vi använder ett tryggt sätt att skriva regex för att undvika fel
+    pattern = r"\[cite:.*?\]"
+    return re.sub(pattern, "", text)
+
+# --- 3. FUNKTION: LÄS PDF (FÖR AI-MINNET) ---
 def get_pdf_text_smart():
     text_content = ""
-    # Vi kollar bara i nuvarande mapp
     if not os.path.exists('.'): return ""
     
-    # Hitta alla PDF-filer
-    pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf')]
+    # Hitta alla PDF-filer utom formelbladet (så vi inte läser in det som "teori")
+    pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf') and "formelblad" not in f]
     
     if not pdf_files: return ""
     
@@ -113,8 +119,8 @@ else:
 
 # Master Prompten som skickas till AI:n
 master_prompt = f"""
-DU ÄR MATTECOACHEN.
-{mission_instruction}
+DU ÄR "MATTECOACHEN" (Stavat med e).
+Du är en pedagogisk mattelärare för årskurs 9.
 
 DIN KUNSKAPSBAS (Från uppladdade filer):
 {pdf_text}
@@ -123,7 +129,13 @@ GENERELLA REGLER:
 1. Ge aldrig svaret direkt. Lotsa eleven steg för steg.
 2. Svarar eleven RÄTT -> Ge beröm + En lite svårare fråga.
 3. Svarar eleven FEL -> Förklara pedagogiskt + En liknande fråga.
-4. SKAPA NYA UPPGIFTER: Var kreativ! Hitta på nya tal men behåll "NP-stilen".
+4. SKAPA NYA UPPGIFTER: Hitta på nya tal men behåll "NP-stilen". Säg "Här är en uppgift i NP-stil".
+
+VIKTIGT OM RIT-UPPGIFTER:
+Eftersom eleven inte kan rita i chatten:
+- Be INTE eleven att rita något om det inte är absolut nödvändigt för förståelsen (t.ex. grafer).
+- Om en uppgift normalt kräver ritning, be istället eleven att beskriva med ord eller beräkna egenskaperna direkt.
+- Exempel: Istället för "Rita en rektangel med sidorna 5 och 10", säg "Tänk dig en rektangel med sidorna 5 och 10. Vad blir omkretsen?".
 
 TON: Peppande, tydlig och hjälpsam.
 """
@@ -131,10 +143,7 @@ TON: Peppande, tydlig och hjälpsam.
 # --- 6. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
 # Vi använder Gemini 2.5 Flash (Snabb & Smart)
-model = genai.GenerativeModel(
-    'models/gemini-2.5-flash',
-    system_instruction=master_prompt
-)
+model = genai.GenerativeModel('models/gemini-2.5-flash')
 
 # --- 7. CHATT-GRÄNSSNITTET ---
 st.title(f"🎓 {selected_topic}")
@@ -166,15 +175,21 @@ if prompt := st.chat_input("Skriv här..."):
         try:
             # Vi skickar historiken (minus sista frågan som skickas i send_message)
             history_minus_last = gemini_history[:-1]
+            # Initiera chatten med systeminstruktioner
             chat = model.start_chat(history=history_minus_last)
             
             # Skicka en påminnelse om vilket ämne som gäller
             context_reminder = f"[SYSTEM: Eleven är i läget '{selected_topic}'. Håll dig till det.]"
             
-            response = chat.send_message(context_reminder + "\n\nSVAR: " + prompt)
+            # Vi skickar systeminstruktioner i ett separat "System"-meddelande
+            response = chat.send_message(
+                str(master_prompt) + "\n\n" + context_reminder + "\n\nSVAR: " + prompt
+            )
             
-            # Visa svaret
-            st.markdown(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            # Tvätta bort [cite] taggar innan visning
+            final_text = clean_text(response.text)
+            
+            st.markdown(final_text)
+            st.session_state.messages.append({"role": "assistant", "content": final_text})
         except Exception as e:
             st.error(f"Ett fel uppstod. Försök igen! (Felkod: {e})")
