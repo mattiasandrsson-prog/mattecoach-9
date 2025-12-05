@@ -4,88 +4,123 @@ import os
 from pypdf import PdfReader
 
 # --- 1. KONFIGURATION ---
-st.set_page_config(page_title="Mattecoachen Åk 9", page_icon="🎓")
+st.set_page_config(page_title="Mattecoachen", page_icon="🎓")
 
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except:
-    st.error("Ingen API-nyckel hittad. Lägg in den i Streamlit Secrets!")
+    st.error("Ingen API-nyckel hittad.")
     st.stop()
 
-# --- 2. FUNKTION: LÄS PDF ---
+# --- 2. LÄS PDF ---
 def get_pdf_text_smart():
     text_content = ""
-    # Läs alla PDF-filer i mappen
-    # Vi kollar bara i nuvarande mapp (.)
-    if not os.path.exists('.'):
-        return ""
-        
+    if not os.path.exists('.'): return ""
     pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf')]
-    
-    if not pdf_files:
-        return ""
+    if not pdf_files: return ""
     
     for filename in pdf_files:
         try:
             reader = PdfReader(filename)
-            text_content += f"\n--- DOKUMENT: {filename} ---\n"
+            text_content += f"\n--- KÄLLA: {filename} ---\n"
             for page in reader.pages:
                 text_content += page.extract_text() + "\n"
-        except:
-            continue
+        except: continue
     return text_content
 
-# --- 3. LÄS IN KUNSKAPEN ---
 pdf_text = get_pdf_text_smart()
 
-# --- 4. MASTER PROMPT (Hjärnan) ---
-master_prompt = f"""
-DU ÄR "MATTECOACHEN" (Stavat med e).
-Du är en pedagogisk mattelärare för årskurs 9.
-Presentera dig alltid som "Mattecoachen".
+# --- 3. MENY (Nu med NP-val) ---
+with st.sidebar:
+    st.header("⚙️ Välj fokus")
+    
+    # Här lägger vi till "Nationella Prov" som ett specifikt val
+    selected_topic = st.selectbox(
+        "Vad vill du göra idag?",
+        [
+            "🏆 Nationella Prov (Simulering)",  # <--- NYTT VAL
+            "🔢 Taluppfattning",
+            "🧮 Algebra & Ekvationer",
+            "📐 Geometri",
+            "🎲 Sannolikhet & Statistik",
+            "📈 Samband & Funktioner"
+        ]
+    )
+    
+    st.divider()
+    st.caption("Tips: Välj 'Nationella Prov' för att blanda uppgifter och testa dig inför provet.")
+    
+    if st.button("Nollställ chatten"):
+        st.session_state.messages = []
+        st.rerun()
 
-DIN KUNSKAP (Från dina uppladdade filer):
+# --- 4. DYNAMISK PROMPT (Hjärnan anpassar sig) ---
+
+# Vi kollar vad eleven valde och ändrar instruktionen baserat på det
+if "Nationella Prov" in selected_topic:
+    # --- LÄGE 1: NP-SIMULATOR ---
+    mission_instruction = """
+    DU ÄR EN PROVLEDARE INFÖR NATIONELLA PROVEN.
+    1. Ditt mål är att simulera ett riktigt prov.
+    2. Blanda uppgifter från alla områden (Geometri, Algebra, Sannolikhet etc.).
+    3. Härma stilen och språkbruket från de gamla proven EXAKT.
+    4. Börja med en E-uppgift, men om eleven svarar rätt, gå snabbt mot C och A-nivå (problemlösning).
+    """
+    welcome_text = "Hej! Nu kör vi NP-träning. Jag kommer blanda uppgifter från alla områden, precis som på riktigt. Är du redo för första frågan?"
+
+else:
+    # --- LÄGE 2: ÄMNES-TUTOR ---
+    mission_instruction = f"""
+    DU ÄR EN PEDAGOGISK PRIVATLÄRARE I: {selected_topic.upper()}.
+    1. Ditt mål är att lära eleven förstå just detta område på djupet.
+    2. Håll dig enbart till ämnet "{selected_topic}".
+    3. Var extra tålmodig och förklara begrepp om eleven fastnar.
+    """
+    welcome_text = f"Hej! Då fokuserar vi på **{selected_topic}**. Vad vill du börja med? Eller ska jag ge dig en startuppgift?"
+
+# Den kompletta prompten
+master_prompt = f"""
+DU ÄR MATTECOACHEN.
+{mission_instruction}
+
+DIN KUNSKAPSBAS (Använd alltid denna fakta):
 {pdf_text}
 
-DINA REGLER:
-1. Ge aldrig svaret direkt. Lotsa eleven steg för steg.
-2. Använd fakta från texten ovan (t.ex. formler för geometri).
-3. SKAPA NYA UPPGIFTER: Du SKA generera egna, unika uppgifter när eleven ber om träning.
-   - Kopiera inte uppgifter ordagrant från filerna.
-   - Hitta på nya siffror och sammanhang, men behåll samma svårighetsgrad och stil som i de gamla proven.
-   - Var ärlig: Säg "Här är en uppgift i NP-stil som jag tagit fram åt dig", påstå inte att det är ett specifikt nummer från ett gammalt prov.
+GENERELLA REGLER:
+1. Ge aldrig svaret direkt. Lotsa eleven.
+2. Nivåer:
+   - E: Procedur/Begrepp.
+   - C: Flera steg.
+   - A: Resonemang/Generalisering.
+3. Om eleven svarar RÄTT -> Ge beröm och öka nivån.
+4. Om eleven svarar FEL -> Förklara pedagogiskt och sänk nivån.
 
-4. Stavning: Se till att stava matematiska begrepp korrekt på svenska.
-
-PEDAGOGIK:
-Var uppmuntrande men seriös. 
+TON: Peppande, tydlig och hjälpsam.
 """
 
 # --- 5. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
-# Vi använder 2.5 Flash för att den är stabilast med filer
-model = genai.GenerativeModel('models/gemini-2.5-flash')
+model = genai.GenerativeModel(
+    'models/gemini-2.5-flash',
+    system_instruction=master_prompt
+)
 
 # --- 6. CHATTEN ---
-st.title("🎓 Mattecoachen")
-st.caption("Din digitala lärare inför NP")
+st.title(f"🎓 {selected_topic}")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+    st.session_state.messages.append({"role": "assistant", "content": welcome_text})
 
-# Visa historik
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Ta emot fråga
-if prompt := st.chat_input("Vad behöver du hjälp med?"):
-    # Spara elevens fråga
+if prompt := st.chat_input("Skriv ditt svar eller din fråga här..."):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Förbered historik för Google
     gemini_history = []
     for msg in st.session_state.messages:
         role = "user" if msg["role"] == "user" else "model"
@@ -93,16 +128,14 @@ if prompt := st.chat_input("Vad behöver du hjälp med?"):
 
     with st.chat_message("assistant"):
         try:
-            # Vi startar chatten med historik utom sista meddelandet
             history_minus_last = gemini_history[:-1]
             chat = model.start_chat(history=history_minus_last)
             
-            # Vi skickar Master Prompten osynligt varje gång för att påminna den om reglerna
-            full_prompt = master_prompt + "\n\nELEVEN SÄGER: " + prompt
+            # Vi påminner den om vad som är valt
+            context_reminder = f"[SYSTEM: Eleven har valt läget: {selected_topic}. Följ instruktionen för detta läge.]"
             
-            response = chat.send_message(full_prompt)
-            
+            response = chat.send_message(context_reminder + "\n\nSVAR: " + prompt)
             st.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
-            st.error(f"Ett fel uppstod. Försök igen! (Felkod: {e})")
+            st.error(f"Ett fel uppstod: {e}")
