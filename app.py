@@ -1,6 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
 import os
+import base64
 from pypdf import PdfReader
 
 # --- 1. KONFIGURATION ---
@@ -12,11 +13,13 @@ except:
     st.error("Ingen API-nyckel hittad.")
     st.stop()
 
-# --- 2. LÄS PDF ---
+# --- 2. FUNKTIONER ---
+
+# Läs text från filer (för AI:n)
 def get_pdf_text_smart():
     text_content = ""
     if not os.path.exists('.'): return ""
-    pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf')]
+    pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf') and "formelblad" not in f] # Undvik att läsa in formelbladet i AI-minnet om du inte vill
     if not pdf_files: return ""
     
     for filename in pdf_files:
@@ -28,9 +31,17 @@ def get_pdf_text_smart():
         except: continue
     return text_content
 
+# Visa PDF i rutan (för eleven)
+def display_pdf(file_path):
+    with open(file_path, "rb") as f:
+        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+    # Vi bäddar in PDF:en med HTML
+    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500" type="application/pdf"></iframe>'
+    st.markdown(pdf_display, unsafe_allow_html=True)
+
 pdf_text = get_pdf_text_smart()
 
-# --- 3. MENY (Med inbyggt formelblad) ---
+# --- 3. MENY ---
 with st.sidebar:
     st.header("⚙️ Välj fokus")
     
@@ -48,31 +59,22 @@ with st.sidebar:
     
     st.divider()
     
-    # --- FORMELBLAD (Visas direkt i menyn) ---
-    st.subheader("🧮 Formelsamling")
-    with st.expander("Visa formler"):
-        st.markdown("**GEOMETRI**")
-        st.caption("Rektangel Area")
-        st.latex(r"A = b \cdot h")
-        st.caption("Triangel Area")
-        st.latex(r"A = \frac{b \cdot h}{2}")
-        st.caption("Cirkel Area & Omkrets")
-        st.latex(r"A = \pi \cdot r^2")
-        st.latex(r"O = \pi \cdot d")
-        
-        st.markdown("---")
-        st.markdown("**ALGEBRA**")
-        st.caption("Räta linjens ekvation")
-        st.latex(r"y = kx + m")
-        st.caption("Prioriteringsregler")
-        st.markdown("1. Parenteser\n2. Potenser\n3. Gånger/Delat\n4. Plus/Minus")
+    # --- HÄR ÄR NYHETEN: VISA PDF ---
+    st.subheader("🧮 Hjälpmedel")
+    
+    # Vi använder en expander så den inte tar plats hela tiden
+    with st.expander("📄 Visa Formelblad"):
+        if os.path.exists("formelblad.pdf"):
+            display_pdf("formelblad.pdf")
+        else:
+            st.warning("Hittade inte filen 'formelblad.pdf'. Ladda upp den till GitHub!")
 
     st.divider()
     if st.button("Nollställ chatten"):
         st.session_state.messages = []
         st.rerun()
 
-# --- 4. DETEKTIV: KOLLA ÄMNESBYTE ---
+# --- 4. KOLLA ÄMNESBYTE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
