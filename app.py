@@ -51,18 +51,23 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-# --- 4. DETEKTIV: BYTT ÄMNE? (Här är fixen!) ---
-# Vi kollar om eleven har bytt ämne sen sist. I så fall rensar vi chatten.
+# --- 4. DETEKTIV: INITIERA & KOLLA ÄMNESBYTE (Här var felet!) ---
+
+# A. Se till att 'messages' alltid finns innan vi rör den
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# B. Se till att 'last_topic' finns
 if "last_topic" not in st.session_state:
     st.session_state.last_topic = selected_topic
 
+# C. Kolla om eleven bytt ämne -> Rensa i så fall
 if st.session_state.last_topic != selected_topic:
     st.session_state.messages = []  # Rensa historik
     st.session_state.last_topic = selected_topic  # Spara nytt ämne
 
 # --- 5. DYNAMISK PROMPT ---
 if "Nationella Prov" in selected_topic:
-    # --- LÄGE 1: NP-SIMULATOR ---
     mission_instruction = """
     DU ÄR EN PROVLEDARE INFÖR NATIONELLA PROVEN.
     1. Ditt mål är att simulera ett riktigt prov.
@@ -72,7 +77,6 @@ if "Nationella Prov" in selected_topic:
     welcome_text = "🏆 **NP-LÄGE:** Nu kör vi! Jag kommer blanda uppgifter från alla områden (Geometri, Algebra, etc). Är du redo för första frågan?"
 
 else:
-    # --- LÄGE 2: ÄMNES-TUTOR ---
     mission_instruction = f"""
     DU ÄR EN PEDAGOGISK PRIVATLÄRARE I: {selected_topic.upper()}.
     1. Håll dig strikt till ämnet "{selected_topic}".
@@ -81,7 +85,6 @@ else:
     """
     welcome_text = f"📘 **FOKUS: {selected_topic.upper()}**\n\nHej! Jag är inställd på att bara köra {selected_topic} med dig. Vill du ha en genomgång eller en övningsuppgift?"
 
-# Master Prompt
 master_prompt = f"""
 DU ÄR MATTECOACHEN.
 {mission_instruction}
@@ -107,7 +110,7 @@ model = genai.GenerativeModel(
 # --- 7. CHATTEN ---
 st.title(f"🎓 {selected_topic}")
 
-# Lägg in välkomstmeddelandet om chatten är tom (t.ex. efter ämnesbyte)
+# Lägg in välkomstmeddelandet om chatten är tom
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": welcome_text})
 
@@ -130,7 +133,6 @@ if prompt := st.chat_input("Skriv ditt svar eller din fråga här..."):
             history_minus_last = gemini_history[:-1]
             chat = model.start_chat(history=history_minus_last)
             
-            # Påminnelse om ämnet (osynlig system-instruktion)
             context_reminder = f"[SYSTEM: Eleven är i läget '{selected_topic}'. Håll dig till det.]"
             
             response = chat.send_message(context_reminder + "\n\nSVAR: " + prompt)
