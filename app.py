@@ -7,21 +7,6 @@ from pypdf import PdfReader
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="Mattecoachen", page_icon="🎓")
 
-# --- DÖLJ REKLAM OCH MENYER (UPPDATERAD CSS) ---
-hide_streamlit_style = """
-            <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
-            /* Döljer 'Hosted with Streamlit' */
-            .viewerBadge_container__1QSob {display: none;}
-            .stAppDeployButton {display: none;}
-            [data-testid="stDecoration"] {display: none;}
-            [data-testid="stStatusWidget"] {visibility: hidden;}
-            </style>
-            """
-st.markdown(hide_streamlit_style, unsafe_allow_html=True)
-
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except:
@@ -37,10 +22,9 @@ def clean_text(text):
 # --- 3. FUNKTION: LÄS PDF (FÖR AI-MINNET) ---
 def get_pdf_text_smart():
     text_content = ""
-    # Vi kollar bara i nuvarande mapp
     if not os.path.exists('.'): return ""
     
-    # Hitta alla PDF-filer utom formelbladet
+    # Hitta alla PDF-filer utom formelbladet (så vi inte läser in det som "teori")
     pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf') and "formelblad" not in f]
     
     if not pdf_files: return ""
@@ -57,7 +41,7 @@ def get_pdf_text_smart():
 # Läs in all text från PDF:erna när appen startar
 pdf_text = get_pdf_text_smart()
 
-# --- 4. SIDOMENY (Med Formelblad som BILDER) ---
+# --- 3. SIDOMENY (Med Formelblad som BILDER) ---
 with st.sidebar:
     st.header("⚙️ Välj fokus")
     
@@ -100,7 +84,7 @@ with st.sidebar:
         st.session_state.messages = []
         st.rerun()
 
-# --- 5. LOGIK: KOLLA OM ELEVEN BYTT ÄMNE ---
+# --- 4. LOGIK: KOLLA OM ELEVEN BYTT ÄMNE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -112,7 +96,7 @@ if st.session_state.last_topic != selected_topic:
     st.session_state.messages = []
     st.session_state.last_topic = selected_topic
 
-# --- 6. DYNAMISK PROMPT (Hjärnan) ---
+# --- 5. DYNAMISK PROMPT (Hjärnan) ---
 if "Nationella Prov" in selected_topic:
     # LÄGE 1: NP-SIMULATOR
     mission_instruction = """
@@ -156,12 +140,12 @@ Eftersom eleven inte kan rita i chatten:
 TON: Peppande, tydlig och hjälpsam.
 """
 
-# --- 7. STARTA MODELLEN ---
+# --- 6. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
 # Vi använder Gemini 2.5 Flash (Snabb & Smart)
 model = genai.GenerativeModel('models/gemini-2.5-flash')
 
-# --- 8. CHATT-GRÄNSSNITTET ---
+# --- 7. CHATT-GRÄNSSNITTET ---
 st.title(f"🎓 {selected_topic}")
 
 # Visa välkomstmeddelande om chatten är tom
