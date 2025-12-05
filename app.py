@@ -2,8 +2,6 @@ import streamlit as st
 import google.generativeai as genai
 import os
 import re
-import matplotlib.pyplot as plt
-import numpy as np
 from pypdf import PdfReader
 
 # --- 1. KONFIGURATION ---
@@ -15,50 +13,18 @@ except:
     st.error("Ingen API-nyckel hittad. Lägg in den i Streamlit Secrets!")
     st.stop()
 
-# --- 2. FUNKTIONER FÖR TEXT & GRAFER ---
-
+# --- 2. FUNKTION: STÄDA BORT KÄLLHÄNVISNINGAR ---
 def clean_text(text):
-    # Tar bort källhänvisningar [cite:...]
-    text = re.sub(r'\[cite:.*?\]', '', text)
-    # Tar bort graf-kommandot så det inte syns i texten
-    text = re.sub(r'\[GRAPH:.*?\]', '', text)
-    return text
+    # Vi använder ett tryggt sätt att skriva regex för att undvika fel
+    pattern = r"\[cite:.*?\]"
+    return re.sub(pattern, "", text)
 
-def extract_graph_command(text):
-    # Letar efter kommandon som [GRAPH: y=2x+1]
-    match = re.search(r'\[GRAPH: (.*?)\]', text)
-    if match:
-        return match.group(1)
-    return None
-
-def plot_function(equation):
-    # En enkel grafritare
-    try:
-        x = np.linspace(-10, 10, 400)
-        # Snygga till ekvationen för Python (t.ex. 2x -> 2*x)
-        eq_clean = equation.replace("y=", "").replace(" ", "").replace("^", "**")
-        eq_clean = re.sub(r'(\d)x', r'\1*x', eq_clean)
-        
-        y = eval(eq_clean)
-        
-        fig, ax = plt.subplots()
-        ax.plot(x, y, label=f"y={eq_clean.replace('*', '')}")
-        ax.axhline(0, color='black', linewidth=1)
-        ax.axvline(0, color='black', linewidth=1)
-        ax.grid(True, linestyle='--', alpha=0.7)
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.legend()
-        return fig
-    except:
-        return None
-
-# --- 3. LÄS PDF (FÖR AI-MINNET) ---
+# --- 3. FUNKTION: LÄS PDF (FÖR AI-MINNET) ---
 def get_pdf_text_smart():
     text_content = ""
     if not os.path.exists('.'): return ""
     
-    # Läs alla PDF:er utom formelbladet till minnet
+    # Hitta alla PDF-filer utom formelbladet (så vi inte läser in det som "teori")
     pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf') and "formelblad" not in f]
     
     if not pdf_files: return ""
@@ -72,9 +38,10 @@ def get_pdf_text_smart():
         except: continue
     return text_content
 
+# Läs in all text från PDF:erna när appen startar
 pdf_text = get_pdf_text_smart()
 
-# --- 4. MENY ---
+# --- 3. SIDOMENY (Med Formelblad som BILDER) ---
 with st.sidebar:
     st.header("⚙️ Välj fokus")
     
@@ -92,127 +59,137 @@ with st.sidebar:
     
     st.divider()
     
-    # --- FORMELBLAD (VISAR BILDER) ---
+    # --- FORMELBLAD ---
     st.subheader("🧮 Hjälpmedel")
     
     with st.expander("📄 Visa Formelblad"):
+        # Kollar om bilderna finns (Sida 1)
         if os.path.exists("formelblad_sida1.png"):
             st.image("formelblad_sida1.png", caption="Sida 1", use_container_width=True)
+        
+        # Kollar om bilderna finns (Sida 2)
         if os.path.exists("formelblad_sida2.png"):
             st.image("formelblad_sida2.png", caption="Sida 2", use_container_width=True)
             
-        # Reservlösning
+        # Reservlösning: Om du bara laddat upp en enda bild
         if os.path.exists("formelblad.png") and not os.path.exists("formelblad_sida1.png"):
              st.image("formelblad.png", use_container_width=True)
              
+        # Om inga bilder finns
         if not any(f.endswith('.png') for f in os.listdir('.')):
-            st.info("Inga bilder uppladdade än.")
+            st.info("Ladda upp 'formelblad_sida1.png' på GitHub för att se det här!")
 
     st.divider()
     if st.button("Nollställ chatten"):
         st.session_state.messages = []
         st.rerun()
 
-# --- 5. LOGIK: KOLLA OM ELEVEN BYTT ÄMNE ---
+# --- 4. LOGIK: KOLLA OM ELEVEN BYTT ÄMNE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "last_topic" not in st.session_state:
     st.session_state.last_topic = selected_topic
 
+# Om eleven byter ämne i menyn -> Rensa historiken
 if st.session_state.last_topic != selected_topic:
     st.session_state.messages = []
     st.session_state.last_topic = selected_topic
 
-# --- 6. DYNAMISK PROMPT (Hjärnan) ---
+# --- 5. DYNAMISK PROMPT (Hjärnan) ---
 if "Nationella Prov" in selected_topic:
+    # LÄGE 1: NP-SIMULATOR
     mission_instruction = """
-    DU ÄR EN PROVLEDARE INFÖR NATIONELLA PROVEN.
-    1. Simulera ett riktigt prov. Blanda områden.
-    2. Härma stilen från de gamla proven.
+    DU ÄR EN PROVLEDARE INFÖR NATIONELLA PROVEN (ÅK 9).
+    1. Ditt mål är att simulera ett riktigt prov.
+    2. Blanda uppgifter från alla områden (Geometri, Algebra, Sannolikhet etc.).
+    3. Härma stilen och språkbruket från de gamla proven EXAKT.
     """
-    welcome_text = "🏆 **NP-LÄGE:** Nu kör vi! Jag kommer blanda uppgifter. Är du redo?"
+    welcome_text = "🏆 **NP-LÄGE:** Nu kör vi! Jag kommer blanda uppgifter från alla områden. Är du redo?"
+
 else:
+    # LÄGE 2: ÄMNES-LÄRARE
     mission_instruction = f"""
     DU ÄR EN PEDAGOGISK PRIVATLÄRARE I: {selected_topic.upper()}.
-    1. Håll dig till ämnet "{selected_topic}".
-    2. Var extra tålmodig.
+    1. Håll dig strikt till ämnet "{selected_topic}".
+    2. Var extra tålmodig och förklara begrepp djupt.
+    3. Använd fakta från din bok om just detta område.
     """
     welcome_text = f"📘 **FOKUS: {selected_topic.upper()}**\n\nHej! Jag är redo. Vad vill du börja med?"
 
+# Master Prompten som skickas till AI:n
 master_prompt = f"""
-DU ÄR "MATTECOACHEN".
+DU ÄR "MATTECOACHEN" (Stavat med e).
 Du är en pedagogisk mattelärare för årskurs 9.
 
-DIN KUNSKAPSBAS (Från filer):
+DIN KUNSKAPSBAS (Från uppladdade filer):
 {pdf_text}
 
-REGLER:
-1. Ge aldrig svaret direkt. Lotsa eleven.
+GENERELLA REGLER:
+1. Ge aldrig svaret direkt. Lotsa eleven steg för steg.
 2. Svarar eleven RÄTT -> Ge beröm + En lite svårare fråga.
 3. Svarar eleven FEL -> Förklara pedagogiskt + En liknande fråga.
 4. SKAPA NYA UPPGIFTER: Hitta på nya tal men behåll "NP-stilen". Säg "Här är en uppgift i NP-stil".
 
-GRAFER:
-Om du ska visa en linjär funktion (y=kx+m), skriv kommandot:
-[GRAPH: y=2x+1]
-(Byt ut siffrorna. Endast linjära funktioner).
-
 VIKTIGT OM RIT-UPPGIFTER:
-- Be INTE eleven att rita något om det inte är absolut nödvändigt.
-- Be istället eleven beskriva eller beräkna egenskaperna.
+Eftersom eleven inte kan rita i chatten:
+- Be INTE eleven att rita något om det inte är absolut nödvändigt för förståelsen (t.ex. grafer).
+- Om en uppgift normalt kräver ritning, be istället eleven att beskriva med ord eller beräkna egenskaperna direkt.
+- Exempel: Istället för "Rita en rektangel med sidorna 5 och 10", säg "Tänk dig en rektangel med sidorna 5 och 10. Vad blir omkretsen?".
 
 TON: Peppande, tydlig och hjälpsam.
 """
 
-# --- 7. STARTA MODELLEN ---
+# --- 6. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
-# Vi använder Gemini 2.5 Flash
-model = genai.GenerativeModel('models/gemini-2.5-flash', system_instruction=master_prompt)
+# Vi använder Gemini 2.5 Flash (Snabb & Smart)
+model = genai.GenerativeModel('models/gemini-2.5-flash')
 
-# --- 8. CHATT-GRÄNSSNITTET ---
+# --- 7. CHATT-GRÄNSSNITTET ---
 st.title(f"🎓 {selected_topic}")
 
+# Visa välkomstmeddelande om chatten är tom
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": welcome_text})
 
+# Rita ut hela historiken
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# Ta emot input från eleven
 if prompt := st.chat_input("Skriv här..."):
+    # 1. Visa elevens fråga
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # 2. Förbered historik för Google (Mappar om formatet)
     gemini_history = []
     for msg in st.session_state.messages:
         role = "user" if msg["role"] == "user" else "model"
         gemini_history.append({"role": role, "parts": [msg["content"]]})
 
+    # 3. Skicka till AI och visa svar
     with st.chat_message("assistant"):
         try:
+            # Vi skickar historiken (minus sista frågan som skickas i send_message)
             history_minus_last = gemini_history[:-1]
+            # Initiera chatten med systeminstruktioner
             chat = model.start_chat(history=history_minus_last)
             
-            context_reminder = f"[SYSTEM: Eleven är i läget '{selected_topic}'.]"
+            # Skicka en påminnelse om vilket ämne som gäller
+            context_reminder = f"[SYSTEM: Eleven är i läget '{selected_topic}'. Håll dig till det.]"
             
-            response = chat.send_message(context_reminder + "\n\nSVAR: " + prompt)
+            # Vi skickar systeminstruktioner i ett separat "System"-meddelande
+            response = chat.send_message(
+                str(master_prompt) + "\n\n" + context_reminder + "\n\nSVAR: " + prompt
+            )
             
-            # 1. Kolla om AI vill rita en graf
-            graph_cmd = extract_graph_command(response.text)
-            
-            # 2. Tvätta texten
+            # Tvätta bort [cite] taggar innan visning
             final_text = clean_text(response.text)
+            
             st.markdown(final_text)
-            
-            # 3. Rita grafen om beordrad
-            if graph_cmd:
-                fig = plot_function(graph_cmd)
-                if fig:
-                    st.pyplot(fig)
-            
             st.session_state.messages.append({"role": "assistant", "content": final_text})
-            
         except Exception as e:
             st.error(f"Ett fel uppstod. Försök igen! (Felkod: {e})")
