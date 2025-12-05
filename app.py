@@ -1,11 +1,20 @@
 import streamlit as st
 import google.generativeai as genai
 import os
-import re
 from pypdf import PdfReader
 
 # --- 1. KONFIGURATION ---
 st.set_page_config(page_title="Mattecoachen", page_icon="🎓")
+
+# --- NYTT: DÖLJ REKLAM OCH MENYER ---
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
@@ -13,18 +22,13 @@ except:
     st.error("Ingen API-nyckel hittad. Lägg in den i Streamlit Secrets!")
     st.stop()
 
-# --- 2. FUNKTION: STÄDA BORT KÄLLHÄNVISNINGAR ---
-def clean_text(text):
-    # Vi använder ett tryggt sätt att skriva regex för att undvika fel
-    pattern = r"\[cite:.*?\]"
-    return re.sub(pattern, "", text)
-
-# --- 3. FUNKTION: LÄS PDF (FÖR AI-MINNET) ---
+# --- 2. FUNKTION: LÄS PDF (FÖR AI-MINNET) ---
 def get_pdf_text_smart():
     text_content = ""
+    # Vi kollar bara i nuvarande mapp
     if not os.path.exists('.'): return ""
     
-    # Hitta alla PDF-filer utom formelbladet (så vi inte läser in det som "teori")
+    # Hitta alla PDF-filer utom formelbladet
     pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf') and "formelblad" not in f]
     
     if not pdf_files: return ""
@@ -186,10 +190,7 @@ if prompt := st.chat_input("Skriv här..."):
                 str(master_prompt) + "\n\n" + context_reminder + "\n\nSVAR: " + prompt
             )
             
-            # Tvätta bort [cite] taggar innan visning
-            final_text = clean_text(response.text)
-            
-            st.markdown(final_text)
-            st.session_state.messages.append({"role": "assistant", "content": final_text})
+            st.markdown(response.text)
+            st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
             st.error(f"Ett fel uppstod. Försök igen! (Felkod: {e})")
