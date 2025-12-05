@@ -1,7 +1,6 @@
 import streamlit as st
 import google.generativeai as genai
 import os
-import base64
 from pypdf import PdfReader
 
 # --- 1. KONFIGURATION ---
@@ -10,16 +9,18 @@ st.set_page_config(page_title="Mattecoachen", page_icon="🎓")
 try:
     api_key = st.secrets["GOOGLE_API_KEY"]
 except:
-    st.error("Ingen API-nyckel hittad.")
+    st.error("Ingen API-nyckel hittad. Lägg in den i Streamlit Secrets!")
     st.stop()
 
-# --- 2. FUNKTIONER ---
-
-# Läs text från filer (för AI:n)
+# --- 2. FUNKTION: LÄS PDF (FÖR AI-MINNET) ---
 def get_pdf_text_smart():
     text_content = ""
+    # Vi kollar bara i nuvarande mapp
     if not os.path.exists('.'): return ""
-    pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf') and "formelblad" not in f] # Undvik att läsa in formelbladet i AI-minnet om du inte vill
+    
+    # Hitta alla PDF-filer
+    pdf_files = [f for f in os.listdir('.') if f.endswith('.pdf')]
+    
     if not pdf_files: return ""
     
     for filename in pdf_files:
@@ -31,17 +32,10 @@ def get_pdf_text_smart():
         except: continue
     return text_content
 
-# Visa PDF i rutan (för eleven)
-def display_pdf(file_path):
-    with open(file_path, "rb") as f:
-        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-    # Vi bäddar in PDF:en med HTML
-    pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="500" type="application/pdf"></iframe>'
-    st.markdown(pdf_display, unsafe_allow_html=True)
-
+# Läs in all text från PDF:erna när appen startar
 pdf_text = get_pdf_text_smart()
 
-# --- 3. MENY ---
+# --- 3. SIDOMENY (Med Formelblad som BILDER) ---
 with st.sidebar:
     st.header("⚙️ Välj fokus")
     
@@ -59,102 +53,128 @@ with st.sidebar:
     
     st.divider()
     
-    # --- HÄR ÄR NYHETEN: VISA PDF ---
+    # --- FORMELBLAD ---
     st.subheader("🧮 Hjälpmedel")
     
-    # Vi använder en expander så den inte tar plats hela tiden
     with st.expander("📄 Visa Formelblad"):
-        if os.path.exists("formelblad.pdf"):
-            display_pdf("formelblad.pdf")
-        else:
-            st.warning("Hittade inte filen 'formelblad.pdf'. Ladda upp den till GitHub!")
+        # Kollar om bilderna finns (Sida 1)
+        if os.path.exists("formelblad_sida1.png"):
+            st.image("formelblad_sida1.png", caption="Sida 1", use_container_width=True)
+        
+        # Kollar om bilderna finns (Sida 2)
+        if os.path.exists("formelblad_sida2.png"):
+            st.image("formelblad_sida2.png", caption="Sida 2", use_container_width=True)
+            
+        # Reservlösning: Om du bara laddat upp en enda bild
+        if os.path.exists("formelblad.png") and not os.path.exists("formelblad_sida1.png"):
+             st.image("formelblad.png", use_container_width=True)
+             
+        # Om inga bilder finns
+        if not any(f.endswith('.png') for f in os.listdir('.')):
+            st.info("Ladda upp 'formelblad_sida1.png' på GitHub för att se det här!")
 
     st.divider()
     if st.button("Nollställ chatten"):
         st.session_state.messages = []
         st.rerun()
 
-# --- 4. KOLLA ÄMNESBYTE ---
+# --- 4. LOGIK: KOLLA OM ELEVEN BYTT ÄMNE ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "last_topic" not in st.session_state:
     st.session_state.last_topic = selected_topic
 
+# Om eleven byter ämne i menyn -> Rensa historiken
 if st.session_state.last_topic != selected_topic:
     st.session_state.messages = []
     st.session_state.last_topic = selected_topic
 
-# --- 5. DYNAMISK PROMPT ---
+# --- 5. DYNAMISK PROMPT (Hjärnan) ---
 if "Nationella Prov" in selected_topic:
+    # LÄGE 1: NP-SIMULATOR
     mission_instruction = """
-    DU ÄR EN PROVLEDARE INFÖR NATIONELLA PROVEN.
+    DU ÄR EN PROVLEDARE INFÖR NATIONELLA PROVEN (ÅK 9).
     1. Ditt mål är att simulera ett riktigt prov.
-    2. Blanda uppgifter från alla områden.
-    3. Härma stilen från de gamla proven.
+    2. Blanda uppgifter från alla områden (Geometri, Algebra, Sannolikhet etc.).
+    3. Härma stilen och språkbruket från de gamla proven EXAKT.
     """
-    welcome_text = "🏆 **NP-LÄGE:** Nu kör vi! Jag kommer blanda uppgifter från alla områden (Geometri, Algebra, etc). Är du redo för första frågan?"
+    welcome_text = "🏆 **NP-LÄGE:** Nu kör vi! Jag kommer blanda uppgifter från alla områden. Är du redo?"
 
 else:
+    # LÄGE 2: ÄMNES-LÄRARE
     mission_instruction = f"""
     DU ÄR EN PEDAGOGISK PRIVATLÄRARE I: {selected_topic.upper()}.
     1. Håll dig strikt till ämnet "{selected_topic}".
     2. Var extra tålmodig och förklara begrepp djupt.
     3. Använd fakta från din bok om just detta område.
     """
-    welcome_text = f"📘 **FOKUS: {selected_topic.upper()}**\n\nHej! Jag är inställd på att bara köra {selected_topic} med dig. Vill du ha en genomgång eller en övningsuppgift?"
+    welcome_text = f"📘 **FOKUS: {selected_topic.upper()}**\n\nHej! Jag är redo. Vad vill du börja med?"
 
+# Master Prompten som skickas till AI:n
 master_prompt = f"""
 DU ÄR MATTECOACHEN.
 {mission_instruction}
 
-DIN KUNSKAPSBAS (Använd alltid denna fakta):
+DIN KUNSKAPSBAS (Från uppladdade filer):
 {pdf_text}
 
 GENERELLA REGLER:
-1. Ge aldrig svaret direkt. Lotsa eleven.
-2. Svarar eleven RÄTT -> Ge beröm + Svårare fråga.
-3. Svarar eleven FEL -> Förklara + Enklare fråga.
+1. Ge aldrig svaret direkt. Lotsa eleven steg för steg.
+2. Svarar eleven RÄTT -> Ge beröm + En lite svårare fråga.
+3. Svarar eleven FEL -> Förklara pedagogiskt + En liknande fråga.
+4. SKAPA NYA UPPGIFTER: Var kreativ! Hitta på nya tal men behåll "NP-stilen".
 
 TON: Peppande, tydlig och hjälpsam.
 """
 
 # --- 6. STARTA MODELLEN ---
 genai.configure(api_key=api_key)
+# Vi använder Gemini 2.5 Flash (Snabb & Smart)
 model = genai.GenerativeModel(
     'models/gemini-2.5-flash',
     system_instruction=master_prompt
 )
 
-# --- 7. CHATTEN ---
+# --- 7. CHATT-GRÄNSSNITTET ---
 st.title(f"🎓 {selected_topic}")
 
+# Visa välkomstmeddelande om chatten är tom
 if not st.session_state.messages:
     st.session_state.messages.append({"role": "assistant", "content": welcome_text})
 
+# Rita ut hela historiken
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-if prompt := st.chat_input("Skriv ditt svar eller din fråga här..."):
+# Ta emot input från eleven
+if prompt := st.chat_input("Skriv här..."):
+    # 1. Visa elevens fråga
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # 2. Förbered historik för Google (Mappar om formatet)
     gemini_history = []
     for msg in st.session_state.messages:
         role = "user" if msg["role"] == "user" else "model"
         gemini_history.append({"role": role, "parts": [msg["content"]]})
 
+    # 3. Skicka till AI och visa svar
     with st.chat_message("assistant"):
         try:
+            # Vi skickar historiken (minus sista frågan som skickas i send_message)
             history_minus_last = gemini_history[:-1]
             chat = model.start_chat(history=history_minus_last)
             
+            # Skicka en påminnelse om vilket ämne som gäller
             context_reminder = f"[SYSTEM: Eleven är i läget '{selected_topic}'. Håll dig till det.]"
             
             response = chat.send_message(context_reminder + "\n\nSVAR: " + prompt)
+            
+            # Visa svaret
             st.markdown(response.text)
             st.session_state.messages.append({"role": "assistant", "content": response.text})
         except Exception as e:
-            st.error(f"Ett fel uppstod: {e}")
+            st.error(f"Ett fel uppstod. Försök igen! (Felkod: {e})")
